@@ -1,0 +1,152 @@
+title: "Bellabeat Case Study" author: "Your Name" output: github_document ---
+
+# 📘 Introduction
+
+Bellabeat is a wellness tech company helping women build healthy habits using smart devices. We analyzed public Fitbit data to uncover user activity and sleep patterns and recommend features for the Bellabeat app.
+
+------------------------------------------------------------------------
+
+# 📂 Data Preparation
+
+```{r setup, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+
+# Load datasets (adjust path if needed)
+daily_activity <- read_csv("dailyActivity_merged.csv")
+sleep_day <- read_csv("sleepDay_cleaned.csv")
+hourly_steps <- read_csv("hourlySteps_merged.csv")
+```
+
+# Join activity and sleep data
+
+```{r}
+activity_sleep <- left_join(daily_activity, sleep_day,
+                            by = c("Id" = "Id", "ActivityDate" = "SleepDay"))
+```
+
+# INSIGHT 1: When Are Users Most Active?
+
+```{r}
+hourly_steps <- hourly_steps %>%
+  mutate(ActivityHour = mdy_hms(ActivityHour),
+         Hour = hour(ActivityHour))
+
+steps_by_hour <- hourly_steps %>%
+  group_by(Hour) %>%
+  summarize(avg_steps = mean(StepTotal, na.rm = TRUE))
+
+# Plot
+ggplot(steps_by_hour, aes(x = Hour, y = avg_steps)) +
+  geom_col(fill = "#FA8072") +
+  labs(title = "When Are Users Most Active?",
+       subtitle = "Average Steps by Hour of the Day",
+       x = "Hour of Day (24h Format)", y = "Average Steps")
+```
+
+# INSIGHT 2: Sedentary Time vs Sleep Duration
+
+```{r}
+ggplot(activity_sleep, aes(x = SedentaryMinutes, y = TotalMinutesAsleep)) +
+  geom_point(alpha = 0.6, color = "#FA8072") +
+  geom_smooth(method = "lm", se = FALSE, color = "#5C3D42") +
+  labs(title = "Sedentary Time vs Sleep Duration",
+       subtitle = "Does being sedentary affect how long users sleep?",
+       x = "Sedentary Minutes per Day",
+       y = "Total Minutes Asleep")
+```
+
+# INSIGHT 3: Activity Intensity vs Calories Burned
+
+```{r}
+activity_intensity <- daily_activity %>%
+  select(Id, ActivityDate, VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes, Calories) %>%
+  pivot_longer(cols = c(VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes),
+               names_to = "IntensityLevel", values_to = "Minutes")
+```
+
+```{r}
+ggplot(activity_intensity, aes(x = Minutes, y = Calories, color = IntensityLevel)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Activity Intensity vs Calories Burned",
+       subtitle = "Which level of activity contributes most to calorie burn?",
+       x = "Minutes per Day", y = "Calories Burned")
+```
+
+
+
+# INSIGHT 4: Percentage of Low-Step Days (\< 5,000 Steps)
+
+```{r}
+activity_sleep_clean <- activity_sleep %>%
+  filter(!is.na(TotalSteps))
+
+print("Number of rows after removing NA TotalSteps:")
+print(nrow(activity_sleep_clean))
+
+low_step_days <- activity_sleep_clean %>%
+  filter(TotalSteps < 5000)
+
+low_step_count <- nrow(low_step_days)
+print("Low step days:")
+print(low_step_count)
+
+total_days <- nrow(activity_sleep_clean)
+print("Total valid days:")
+print(total_days)
+
+percentage_low_steps <- round((low_step_count / total_days)* 100,1)
+print("Percentage of days with < 5000 steps:")
+print(percentage_low_steps)
+
+paste0("Users logged less than 5,000 steps on ", percentage_low_steps, "% of recorded days.")
+```
+
+# INSIGHT 5: Weekly Balance of Activity and Sleep
+
+```{r}
+activity_sleep_weekday <- activity_sleep %>%
+  filter(!is.na(TotalSteps), !is.na(TotalMinutesAsleep)) %>%
+  mutate(weekday = weekdays(ActivityDate)) %>%
+  group_by(weekday) %>%
+  summarize(avg_steps = mean(TotalSteps),
+            avg_sleep = mean(TotalMinutesAsleep))
+```
+
+```{r}
+activity_sleep_weekday$weekday <- factor(activity_sleep_weekday$weekday, 
+                                         levels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+```
+
+# Dual-axis plot (separate plots recommended in R)
+
+```{r}
+ggplot(activity_sleep_weekday, aes(x = weekday)) +
+  geom_col(aes(y = avg_steps), fill = "#FA8072") +
+  geom_line(aes(y = avg_sleep * 20), group = 1, color = "#5C3D42", size = 1.2) +
+  scale_y_continuous(
+    name = "Avg Steps",
+    sec.axis = sec_axis(~./20, name = "Avg Sleep (mins)")
+  ) +
+  labs(title = "Balance of Activity & Sleep by Weekday",
+       subtitle = "Steps (bars) and Sleep (line)",
+       x = "Weekday")
+```
+
+# Final Recommendations
+
+#### Send motivational messages during peak hours (5–8 PM)
+
+#### Suggest movement breaks when sedentary time exceeds 60 minutes
+
+#### Recommend short high-intensity workouts
+
+#### Reward streaks when users hit 5,000+ steps daily
+
+#### Offer a weekly “Balance Score” combining sleep + activity
+
+# Conclusion
+
+#### This case study uses real Fitbit data to deliver data-driven feature ideas for the Bellabeat app. It highlights the power of behavioral analysis in building healthier habits through thoughtful digital nudges.
